@@ -290,10 +290,10 @@ function getRentStatus(room) {
     overduePeriods = Math.floor(daysOverdue / cycle) + 1;
     label = overduePeriods >= 1 ? `-${overduePeriods}期` : `-${daysOverdue}天`;
   } else if (daysLeft <= 7) {
-    label = `${daysLeft}天`;
+    label = `剩${daysLeft}天`;
     daysOverdue = -daysLeft;
   } else {
-    label = `${daysLeft}天`;
+    label = `剩${daysLeft}天`;
     daysOverdue = -daysLeft;
   }
 
