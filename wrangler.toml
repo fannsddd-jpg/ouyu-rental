@@ -5,7 +5,7 @@ compatibility_date = "2025-06-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "ouyu-db"
-database_id = "10c30d31-1375-4999-ac9d-3a1a8e977f88"
+database_id = "3f8f9f07-fc31-40b6-abc1-595e562e7c9d"
 
 [env.production]
 name = "ouyu-rental"
@@ -13,4 +13,4 @@ name = "ouyu-rental"
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "ouyu-db"
-database_id = "10c30d31-1375-4999-ac9d-3a1a8e977f88"
+database_id = "3f8f9f07-fc31-40b6-abc1-595e562e7c9d"
