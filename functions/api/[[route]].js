@@ -246,8 +246,13 @@ export async function onRequest(context) {
   if (request.method === "GET" && url.pathname === "/api/debug") {
     try {
       const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
-      const cnt = db.prepare("SELECT COUNT(*) as cnt FROM rooms").first();
-      return json({ tables: (tables.results || []).map(r => r.name), roomCount: cnt?.cnt });
+      const pragma = db.prepare("PRAGMA database_list").all();
+      const journal = db.prepare("PRAGMA journal_mode").first();
+      return json({
+        tables: (tables.results || []).map(r => r.name),
+        pragma: pragma.results || [],
+        journal: journal?.journal_mode || "unknown"
+      });
     } catch (e) {
       return json({ error: e.message }, 500);
     }
