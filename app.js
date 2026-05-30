@@ -8,6 +8,7 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 let state = defaultState();
 let charts = {};
 let confirmHandler = null;
+let authenticated = false;
 
 function defaultState() {
   return {
@@ -26,9 +27,106 @@ async function api(path, options = {}) {
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || payload.ok === false) {
+    if (response.status === 401) { authenticated = false; showLogin(); }
     throw new Error(payload.error || "服务器请求失败");
   }
   return payload;
+}
+
+// ========== 登录界面 ==========
+
+function ensureLoginUi() {
+  if (document.getElementById("loginOverlay")) return;
+  const style = document.createElement("style");
+  style.textContent = `
+    .login-overlay { position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;padding:22px;background:rgba(5,8,13,.58);backdrop-filter:blur(14px); }
+    .login-overlay.show { display:flex; }
+    .login-panel { width:min(420px,100%);border:1px solid var(--line);border-radius:16px;background:var(--panel-solid);box-shadow:var(--shadow);padding:28px; }
+    .login-panel h2 { margin:0;font-size:22px; }
+    .login-panel p { margin:8px 0 20px;color:var(--muted);line-height:1.55;font-size:14px; }
+    .login-panel form { display:grid;gap:12px; }
+    .login-panel .field { width:100%; }
+    .login-panel .btn { width:100%; }
+    .login-error { color:var(--danger);font-size:13px;display:none; }
+    .logout-btn { min-width:68px; }
+  `;
+  document.head.appendChild(style);
+
+  const overlay = document.createElement("div");
+  overlay.className = "login-overlay";
+  overlay.id = "loginOverlay";
+  overlay.innerHTML = `
+    <div class="login-panel">
+      <h2>偶域 · 私有访问</h2>
+      <p>请输入访问密码。登录后查看和维护房源、租客与记账数据。</p>
+      <form id="loginForm">
+        <input class="field" id="loginPassword" type="password" autocomplete="current-password" required placeholder="请输入密码">
+        <span class="login-error" id="loginError">密码不正确</span>
+        <button class="btn primary" type="submit">进入系统</button>
+      </form>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const logout = document.createElement("button");
+  logout.className = "btn logout-btn";
+  logout.id = "logoutBtn";
+  logout.textContent = "退出";
+  document.querySelector(".top-actions").prepend(logout);
+
+  document.getElementById("loginForm").addEventListener("submit", withBusy(async event => {
+    event.preventDefault();
+    document.getElementById("loginError").style.display = "none";
+    try {
+      await api("/api/login", {
+        method: "POST",
+        body: JSON.stringify({ password: document.getElementById("loginPassword").value })
+      });
+      authenticated = true;
+      hideLogin();
+      document.getElementById("loginPassword").value = "";
+      await loadStateFromServer();
+      toast("登录成功");
+    } catch {
+      document.getElementById("loginError").style.display = "block";
+      document.getElementById("loginPassword").value = "";
+    }
+  }));
+
+  document.getElementById("logoutBtn").addEventListener("click", withBusy(async () => {
+    await api("/api/logout", { method: "POST" });
+    authenticated = false;
+    state = defaultState();
+    renderAll();
+    showLogin();
+    toast("已退出登录");
+  }));
+}
+
+function showLogin() {
+  ensureLoginUi();
+  document.getElementById("loginOverlay").classList.add("show");
+  document.getElementById("logoutBtn").style.display = "none";
+  setTimeout(() => document.getElementById("loginPassword")?.focus(), 100);
+}
+
+function hideLogin() {
+  document.getElementById("loginOverlay")?.classList.remove("show");
+  document.getElementById("logoutBtn").style.display = "";
+}
+
+async function checkLogin() {
+  ensureLoginUi();
+  try {
+    const me = await api("/api/me");
+    authenticated = Boolean(me.authenticated);
+    if (!authenticated) { showLogin(); return false; }
+    hideLogin();
+    return true;
+  } catch {
+    showLogin();
+    return false;
+  }
 }
 
 async function loadStateFromServer() {
@@ -574,6 +672,9 @@ window.addEventListener("keydown", event => {
 applyTheme();
 fillLedgerCategories();
 renderAll();
-loadStateFromServer().catch(error => {
-  toast(error.message || "无法连接服务器");
-});
+checkLogin()
+  .then(ok => ok ? loadStateFromServer() : null)
+  .catch(() => {
+    showLogin();
+    toast("无法连接服务器");
+  });
