@@ -880,10 +880,23 @@
           <label>房间名称<input class="field" id="roomName" required placeholder="如：A 栋 801 主卧"></label>
           <label>房间状态<select class="select" id="roomStatus"><option>空置</option><option>已出租</option></select></label>
           <label class="full">地址<input class="field" id="roomAddress" placeholder="小区 / 楼栋 / 门牌"></label>
-          <label>周期收租 (元)<input class="field" type="number" min="0" step="0.01" id="roomRent" placeholder="每期应收金额"></label>
+
+          <!-- 拿房成本 -->
+          <label class="full" style="color:var(--danger);font-size:14px;margin-top:6px;border-top:1px solid var(--line);padding-top:12px">📥 拿房成本（你付给原房东的）</label>
+          <label>拿房租金 (元)<input class="field" type="number" min="0" step="0.01" id="roomCostRent" placeholder="每期付给房东的金额"></label>
+          <label>付款周期<select class="select" id="roomCostCycle"><option>1个月</option><option>2个月</option><option>3个月</option><option>4个月</option><option>5个月</option><option>6个月</option><option>7个月</option><option>8个月</option><option>9个月</option><option>10个月</option><option>11个月</option><option>12个月</option></select></label>
+          <label>拿房押金<input class="field" type="number" min="0" step="0.01" id="roomCostDeposit" placeholder="付给房东的押金"></label>
+          <label>拿房日期<input class="field" type="date" id="roomCostDate" title="开始拿房的日期"></label>
+
+          <!-- 出租收入 -->
+          <label class="full" style="color:var(--success);font-size:14px;margin-top:6px;border-top:1px solid var(--line);padding-top:12px">📤 出租收入（租客付给你的）</label>
+          <label>出租价格 (元)<input class="field" type="number" min="0" step="0.01" id="roomRentPrice" placeholder="每期向租客收取的金额"></label>
           <label>收租周期<select class="select" id="roomRentCycle"><option>1个月</option><option>2个月</option><option>3个月</option><option>4个月</option><option>5个月</option><option>6个月</option><option>7个月</option><option>8个月</option><option>9个月</option><option>10个月</option><option>11个月</option><option>12个月</option></select></label>
-          <label>押金<input class="field" type="number" min="0" step="0.01" id="roomDeposit" placeholder="0"></label>
-          <label>上次收租日期<input class="field" type="date" id="roomLastRentDate" title="最近一次收到房租的日期，用于计算下次收租时间"></label>
+          <label>租客押金<input class="field" type="number" min="0" step="0.01" id="roomTenantDeposit" placeholder="租客付的押金"></label>
+          <label>上次收租日期<input class="field" type="date" id="roomLastRentDate" title="最近一次收到房租的日期"></label>
+
+          <!-- 租客信息 -->
+          <label class="full" style="color:var(--muted);font-size:14px;margin-top:6px;border-top:1px solid var(--line);padding-top:12px">👤 租客信息</label>
           <label>租客姓名<input class="field" id="tenantName" placeholder="空置可不填"></label>
           <label>联系方式<input class="field" id="tenantPhone" placeholder="手机号 / 微信"></label>
           <label>入住时间<input class="field" type="date" id="startDate"></label>
