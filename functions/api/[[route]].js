@@ -29,13 +29,13 @@ async function readJson(request) {
 // ========== 数据库操作 ==========
 
 function getRooms(db) {
-  const rows = db.prepare("SELECT data FROM rooms ORDER BY updated_at DESC").all();
-  return rows.map((r) => JSON.parse(r.data));
+  const result = db.prepare("SELECT data FROM rooms ORDER BY updated_at DESC").all();
+  return (result.results || []).map((r) => JSON.parse(r.data));
 }
 
 function getLedger(db) {
-  const rows = db.prepare("SELECT data FROM ledger ORDER BY updated_at DESC").all();
-  return rows.map((r) => JSON.parse(r.data));
+  const result = db.prepare("SELECT data FROM ledger ORDER BY updated_at DESC").all();
+  return (result.results || []).map((r) => JSON.parse(r.data));
 }
 
 function getSettings(db) {
