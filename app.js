@@ -303,7 +303,7 @@ function getRentStatus(room) {
     daysOverdue = -daysLeft;
   }
 
-  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const fmt = (d) => `${d.getMonth()+1}月${d.getDate()}日`;
 
   return {
     label,
