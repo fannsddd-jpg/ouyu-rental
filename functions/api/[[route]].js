@@ -17,7 +17,6 @@ function now() {
   return new Date().toISOString();
 }
 
-// 读取请求 JSON body
 async function readJson(request) {
   try {
     return await request.json();
@@ -39,12 +38,12 @@ function getLedger(db) {
 }
 
 function getSettings(db) {
-  const row = db.prepare("SELECT value FROM settings WHERE key = 'settings'").get();
+  const row = db.prepare("SELECT value FROM settings WHERE key = ?").first("settings");
   return row ? JSON.parse(row.value) : { theme: "light" };
 }
 
 function getBackupAt(db) {
-  const row = db.prepare("SELECT backup_at FROM backups WHERE id = 1").get();
+  const row = db.prepare("SELECT backup_at FROM backups WHERE id = ?").first(1);
   return row?.backup_at || null;
 }
 
@@ -59,8 +58,7 @@ function getState(db) {
 }
 
 function replaceTable(db, table, rows) {
-  const del = db.prepare(`DELETE FROM ${table}`);
-  del.run();
+  db.prepare(`DELETE FROM ${table}`).run();
   const insert = db.prepare(
     `INSERT INTO ${table} (id, data, updated_at) VALUES (?, ?, ?)`
   );
@@ -73,10 +71,10 @@ function replaceTable(db, table, rows) {
 function saveSettings(db, settings) {
   db.prepare(
     `INSERT INTO settings (key, value, updated_at)
-     VALUES ('settings', ?, ?)
+     VALUES (?, ?, ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
   )
-    .bind(JSON.stringify(settings || { theme: "light" }), now())
+    .bind("settings", JSON.stringify(settings || { theme: "light" }), now())
     .run();
 }
 
@@ -85,16 +83,16 @@ function createBackup(db) {
   const backupAt = now();
   db.prepare(
     `INSERT INTO backups (id, data, backup_at)
-     VALUES (1, ?, ?)
+     VALUES (?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET data = excluded.data, backup_at = excluded.backup_at`
   )
-    .bind(JSON.stringify({ ...state, backupAt }), backupAt)
+    .bind(1, JSON.stringify({ ...state, backupAt }), backupAt)
     .run();
   return backupAt;
 }
 
 function restoreBackup(db) {
-  const row = db.prepare("SELECT data FROM backups WHERE id = 1").get();
+  const row = db.prepare("SELECT data FROM backups WHERE id = ?").first(1);
   if (!row) return false;
   const state = JSON.parse(row.data);
   replaceTable(db, "rooms", state.rooms);
@@ -104,13 +102,8 @@ function restoreBackup(db) {
 }
 
 function importState(db, state) {
-  const batch = [
-    db.prepare("DELETE FROM rooms"),
-    db.prepare("DELETE FROM ledger"),
-  ];
-  // D1 batch execution
-  for (const stmt of batch) stmt.run();
-
+  db.prepare("DELETE FROM rooms").run();
+  db.prepare("DELETE FROM ledger").run();
   replaceTable(db, "rooms", state.rooms);
   replaceTable(db, "ledger", state.ledger);
   saveSettings(db, state.settings || { theme: "light" });
@@ -230,7 +223,6 @@ async function handleApi(request, db) {
 export async function onRequest(context) {
   const { request, env } = context;
 
-  // 允许跨域（本地开发用）
   if (request.method === "OPTIONS") {
     return new Response(null, {
       headers: {
