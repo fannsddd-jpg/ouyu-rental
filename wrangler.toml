@@ -1,0 +1,11 @@
+name = "ouyu-rental"
+pages_build_output_dir = "."
+compatibility_date = "2025-06-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ouyu-db"
+database_id = "ouyu-db-id"
+
+[env.production]
+name = "ouyu-rental"

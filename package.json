@@ -1,0 +1,15 @@
+{
+  "name": "ouyu-rental-manager",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler pages dev . --d1=ouyu-db",
+    "deploy": "wrangler pages deploy .",
+    "db:init": "wrangler d1 execute ouyu-db --file=db/schema.sql",
+    "db:init:prod": "wrangler d1 execute ouyu-db --file=db/schema.sql --env=production"
+  },
+  "devDependencies": {
+    "wrangler": "^4.95.0"
+  }
+}
