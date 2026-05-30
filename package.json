@@ -4,10 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "db:init": "wrangler d1 execute ouyu-db --file=db/schema.sql",
-    "db:init:prod": "wrangler d1 execute ouyu-db --file=db/schema.sql --remote"
+    "dev": "wrangler pages dev . --d1=ouyu-db",
+    "deploy": "wrangler pages deploy .",
+    "db:init": "wrangler d1 execute ouyu-db --file=db/schema.sql --remote"
   },
   "devDependencies": {
     "wrangler": "^4.95.0"

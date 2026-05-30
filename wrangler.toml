@@ -1,21 +1,8 @@
 name = "ouyu-rental"
-main = "worker.js"
+pages_build_output_dir = "."
 compatibility_date = "2026-05-30"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "ouyu-db"
 database_id = "3f8f9f07-fc31-40b6-abc1-595e562e7c9d"
-
-[env.production]
-name = "ouyu-rental"
-
-[[env.production.d1_databases]]
-binding = "DB"
-database_name = "ouyu-db"
-database_id = "3f8f9f07-fc31-40b6-abc1-595e562e7c9d"
-
-[assets]
-directory = "./public"
-binding = "ASSETS"
-not_found_handling = "none"
