@@ -257,55 +257,52 @@ function getCycleDays(cycle) {
 
 function getRentStatus(room) {
   if (room.status === "空置" || !room.rentPrice) {
-    return { label: room.status === "空置" ? "空置" : "待设置", daysOverdue: -999, nextDue: "-", overduePeriods: 0 };
+    return { label: room.status === "空置" ? "空置" : "待设置", daysOverdue: -999, nextDue: "-", overduePeriods: 0, cycleLabel: room.rentCycle||"1个月" };
   }
   const cycle = getCycleDays(room.rentCycle);
   const today = new Date(); today.setHours(0, 0, 0, 0);
 
-  // 确定基准日期：上次收租日期 > 入住日期
+  // 基准日期：上次收租日
   const baseStr = room.lastRentDate || room.startDate;
-  if (!baseStr) return { label: "待记录收租", daysOverdue: 0, nextDue: "-", overduePeriods: 0 };
+  if (!baseStr) return { label: "待记录收租", daysOverdue: 0, nextDue: "-", overduePeriods: 0, cycleLabel: room.rentCycle||"1个月" };
 
-  const base = new Date(baseStr + "T00:00:00");
+  // 简单算法：从上次收租日开始，不断加周期，直到超过今天
+  let nextDue = new Date(baseStr + "T00:00:00");
+  let lastDue = new Date(nextDue);
 
-  // 计算从 base 开始到现在经历了多少个周期
-  const elapsedDays = Math.floor((today - base) / 86400000);
-  const periodsElapsed = Math.floor(elapsedDays / cycle);
+  // nextDue 往前滚动到超过今天
+  while (nextDue <= today) {
+    lastDue = new Date(nextDue);
+    nextDue.setDate(nextDue.getDate() + cycle);
+  }
 
-  // 下一次应收日期 = base + (periodsElapsed + 1) * cycle
-  const nextDue = new Date(base);
-  nextDue.setDate(nextDue.getDate() + (periodsElapsed + 1) * cycle);
+  // 上次应收日 = nextDue - 一个周期
+  lastDue = new Date(nextDue);
+  lastDue.setDate(lastDue.getDate() - cycle);
 
-  // 最近一次应收日期 = base + periodsElapsed * cycle
-  const lastDue = new Date(base);
-  lastDue.setDate(lastDue.getDate() + periodsElapsed * cycle);
-
-  // 逾期天数 = 从最近应收日到今天
+  // 逾期天数 = 今天 - 上次应收日
   const daysOverdue = Math.floor((today - lastDue) / 86400000);
-  const overduePeriods = Math.floor(daysOverdue / cycle);
+  const overduePeriods = daysOverdue > 0 ? Math.floor(daysOverdue / cycle) + 1 : 0;
 
-  let label, badgeClass;
-  if (daysOverdue > cycle) {
+  let label;
+  if (overduePeriods >= 1) {
     label = `已逾期${overduePeriods}期`;
-    badgeClass = "danger";
   } else if (daysOverdue > 0) {
     label = `逾期${daysOverdue}天`;
-    badgeClass = "danger";
   } else if (daysOverdue > -7) {
     label = `${Math.abs(daysOverdue)}天后收租`;
-    badgeClass = "expiring";
   } else {
     label = "正常";
-    badgeClass = "rented";
   }
+
+  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 
   return {
     label,
-    badgeClass,
     daysOverdue,
-    overduePeriods: Math.max(0, overduePeriods),
-    nextDue: `${nextDue.getFullYear()}-${String(nextDue.getMonth()+1).padStart(2,'0')}-${String(nextDue.getDate()).padStart(2,'0')}`,
-    lastDue: `${lastDue.getFullYear()}-${String(lastDue.getMonth()+1).padStart(2,'0')}-${String(lastDue.getDate()).padStart(2,'0')}`,
+    overduePeriods,
+    nextDue: fmt(nextDue),
+    lastDue: fmt(lastDue),
     cycle,
     cycleLabel: room.rentCycle || "1个月",
   };
