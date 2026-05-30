@@ -464,8 +464,10 @@ function renderDashboardAlerts() {
   box.innerHTML = rows.length ? rows.map(alertTemplate).join("") : `<div class="empty">当前没有紧急提醒 ✓</div>`;
 }
 
-function alertTemplate(item) {
-  return `<div class="alert ${item.danger ? "danger" : ""}"><strong>${escapeHTML(item.title)}</strong><span>${escapeHTML(item.text)}</span></div>`;
+const CN_NUM = ["","一","二","三","四","五","六","七","八","九","十"];
+function alertTemplate(item, i) {
+  const num = CN_NUM[i+1] || (i+1);
+  return `<div class="alert ${item.danger ? "danger" : ""}"><strong>${num}、${escapeHTML(item.title)}</strong><span>${escapeHTML(item.text)}</span></div>`;
 }
 
 function renderRooms() {
