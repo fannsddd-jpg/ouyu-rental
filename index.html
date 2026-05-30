@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>偶域租房管理系统</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <style>
     :root {
       --bg: #f6f7f9;
@@ -835,19 +836,19 @@
         </div>
         <div class="grid backup-grid">
           <div class="card backup-card">
-            <h3>导出完整数据</h3>
-            <p>包含房源、记账、主题设置和自动备份信息。适合换电脑或长期归档。</p>
+            <h3>导出 Excel</h3>
+            <p>导出完整数据为 Excel 文件。房源、记账分不同 Sheet，方便查看和编辑。</p>
             <div class="row-actions">
-              <button class="btn primary" id="exportJsonBtn">导出 JSON</button>
-              <button class="btn" id="manualBackupBtn">生成本地备份</button>
+              <button class="btn primary" id="exportExcelBtn">导出 Excel</button>
+              <button class="btn" id="manualBackupBtn">导出 JSON 备份</button>
             </div>
           </div>
           <div class="card backup-card">
-            <h3>导入 JSON</h3>
-            <p>导入前会弹出确认。导入成功后，当前数据会被文件内容替换。</p>
+            <h3>导入 Excel</h3>
+            <p>从 Excel 文件导入数据。第一行为表头，自动匹配字段并录入。支持 .xlsx / .xls。</p>
             <div class="row-actions">
-              <label class="btn" for="importJsonInput" style="display:inline-flex;align-items:center">选择文件</label>
-              <input id="importJsonInput" type="file" accept="application/json,.json">
+              <label class="btn" for="importExcelInput" style="display:inline-flex;align-items:center">选择 Excel 文件</label>
+              <input id="importExcelInput" type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
             </div>
           </div>
           <div class="card backup-card">

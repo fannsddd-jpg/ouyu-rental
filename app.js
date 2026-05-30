@@ -520,6 +520,122 @@ function exportJSON() {
   toast("JSON 已导出");
 }
 
+// ========== Excel 导出导入 ==========
+
+function exportExcel() {
+  if (!window.XLSX) { toast("Excel 库未加载"); return; }
+
+  // 房源 Sheet
+  const roomHeader = ["房间名称","地址","房租","押金","水费","电费","网费","状态","租客姓名","联系方式","入住时间","到期时间","备注"];
+  const roomRows = state.rooms.map(r => [r.name||"", r.address||"", r.rent||0, r.deposit||0, r.water||0, r.electric||0, r.internet||0, r.status||"", r.tenantName||"", r.tenantPhone||"", r.startDate||"", r.endDate||"", r.note||""]);
+  const roomSheet = XLSX.utils.aoa_to_sheet([roomHeader, ...roomRows]);
+  roomSheet["!cols"] = roomHeader.map(() => ({ wch: 14 }));
+
+  // 记账 Sheet
+  const ledgerHeader = ["日期","类型","分类","房源","金额","备注"];
+  const ledgerRows = state.ledger.map(l => {
+    const room = state.rooms.find(r => r.id === l.roomId);
+    return [l.date||"", l.type==="income"?"收入":"支出", l.category||"", room?.name||"", l.amount||0, l.note||""];
+  });
+  const ledgerSheet = XLSX.utils.aoa_to_sheet([ledgerHeader, ...ledgerRows]);
+  ledgerSheet["!cols"] = ledgerHeader.map(() => ({ wch: 14 }));
+
+  // 汇总 Sheet
+  const summaryRows = [
+    ["汇总项","数值"],
+    ["总房源数", state.rooms.length],
+    ["已出租", state.rooms.filter(r=>r.status==="已出租").length],
+    ["空置", state.rooms.filter(r=>r.status==="空置").length],
+    ["记账总数", state.ledger.length],
+    ["总收入", state.ledger.filter(l=>l.type==="income").reduce((s,l)=>s+Number(l.amount||0),0)],
+    ["总支出", state.ledger.filter(l=>l.type==="expense").reduce((s,l)=>s+Number(l.amount||0),0)],
+    ["导出时间", new Date().toLocaleString("zh-CN")],
+  ];
+  const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows);
+  summarySheet["!cols"] = [{ wch: 18 }, { wch: 16 }];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, roomSheet, "房源");
+  XLSX.utils.book_append_sheet(wb, ledgerSheet, "记账");
+  XLSX.utils.book_append_sheet(wb, summarySheet, "汇总");
+
+  XLSX.writeFile(wb, `偶域租房管理-${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast("Excel 已导出");
+}
+
+function excelToState(wb) {
+  const rooms = [];
+  const ledger = [];
+
+  // 读房源 Sheet
+  const roomSheet = wb.Sheets["房源"] || wb.Sheets[wb.SheetNames[0]];
+  if (roomSheet) {
+    const rows = XLSX.utils.sheet_to_json(roomSheet, { header: 1 });
+    if (rows.length > 1) {
+      const header = rows[0].map(h => String(h||"").trim());
+      const idx = (name) => header.findIndex(h => h.includes(name));
+      const iName = idx("房间名称"), iAddr = idx("地址"), iRent = idx("房租"), iDep = idx("押金");
+      const iWater = idx("水费"), iElec = idx("电费"), iNet = idx("网费"), iStatus = idx("状态");
+      const iTName = idx("租客姓名"), iPhone = idx("联系方式"), iStart = idx("入住"), iEnd = idx("到期"), iNote = idx("备注");
+
+      for (let i = 1; i < rows.length; i++) {
+        const r = rows[i];
+        if (!r || !r.some(c => c)) continue; // 跳过空行
+        rooms.push({
+          id: uid(),
+          name: String(r[iName>=0?iName:0]||""),
+          address: String(r[iAddr>=0?iAddr:1]||""),
+          rent: Number(r[iRent>=0?iRent:2]||0),
+          deposit: Number(r[iDep>=0?iDep:3]||0),
+          water: Number(r[iWater>=0?iWater:4]||0),
+          electric: Number(r[iElec>=0?iElec:5]||0),
+          internet: Number(r[iNet>=0?iNet:6]||0),
+          status: String(r[iStatus>=0?iStatus:7]||"空置"),
+          tenantName: String(r[iTName>=0?iTName:8]||""),
+          tenantPhone: String(r[iPhone>=0?iPhone:9]||""),
+          startDate: String(r[iStart>=0?iStart:10]||""),
+          endDate: String(r[iEnd>=0?iEnd:11]||""),
+          note: String(r[iNote>=0?iNote:12]||""),
+        });
+      }
+    }
+  }
+
+  // 读记账 Sheet
+  const ledgerSheet = wb.Sheets["记账"];
+  if (ledgerSheet) {
+    const rows = XLSX.utils.sheet_to_json(ledgerSheet, { header: 1 });
+    if (rows.length > 1) {
+      const header = rows[0].map(h => String(h||"").trim());
+      const idx = (name) => header.findIndex(h => h.includes(name));
+      const iDate = idx("日期"), iType = idx("类型"), iCat = idx("分类"), iRoom = idx("房源");
+      const iAmt = idx("金额"), iNote = idx("备注");
+
+      // 构建房源名称→ID 映射
+      const roomMap = {};
+      rooms.forEach(r => { roomMap[r.name] = r.id; });
+
+      for (let i = 1; i < rows.length; i++) {
+        const r = rows[i];
+        if (!r || !r.some(c => c)) continue;
+        const typeStr = String(r[iType>=0?iType:1]||"");
+        const roomName = String(r[iRoom>=0?iRoom:3]||"");
+        ledger.push({
+          id: uid(),
+          date: String(r[iDate>=0?iDate:0]||""),
+          type: typeStr.includes("支出") ? "expense" : "income",
+          category: String(r[iCat>=0?iCat:2]||""),
+          roomId: roomMap[roomName] || "",
+          amount: Number(r[iAmt>=0?iAmt:4]||0),
+          note: String(r[iNote>=0?iNote:5]||""),
+        });
+      }
+    }
+  }
+
+  return { rooms, ledger, settings: state.settings };
+}
+
 function escapeHTML(value) {
   return String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char]));
 }
@@ -617,7 +733,7 @@ document.getElementById("confirmOk").addEventListener("click", () => {
 });
 
 document.getElementById("exportCsvBtn").addEventListener("click", exportCSV);
-document.getElementById("exportJsonBtn").addEventListener("click", exportJSON);
+document.getElementById("exportExcelBtn").addEventListener("click", exportExcel);
 document.getElementById("manualBackupBtn").addEventListener("click", withBusy(async () => {
   const payload = await api("/api/backup", { method: "POST" });
   await refreshFromPayload(payload, "服务器备份已生成");
@@ -635,22 +751,27 @@ document.getElementById("clearDataBtn").addEventListener("click", () => {
     await refreshFromPayload(payload, "数据已清空");
   }));
 });
-document.getElementById("importJsonInput").addEventListener("change", event => {
+document.getElementById("importExcelInput").addEventListener("change", event => {
   const file = event.target.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = () => {
     try {
-      const imported = JSON.parse(reader.result);
-      askConfirm("导入 JSON", "导入后会覆盖服务器当前数据，确定继续吗？", withBusy(async () => {
-        const payload = await api("/api/import", { method: "POST", body: JSON.stringify(imported) });
-        await refreshFromPayload(payload, "JSON 已导入服务器");
-      }));
-    } catch {
-      toast("JSON 文件格式不正确");
+      const wb = XLSX.read(reader.result, { type: "array" });
+      const imported = excelToState(wb);
+      const roomCount = imported.rooms.length;
+      const ledgerCount = imported.ledger.length;
+      askConfirm("导入 Excel",
+        `检测到 ${roomCount} 条房源、${ledgerCount} 条记账记录。导入会覆盖当前数据，确定继续吗？`,
+        withBusy(async () => {
+          const payload = await api("/api/import", { method: "POST", body: JSON.stringify(imported) });
+          await refreshFromPayload(payload, `Excel 导入成功！房源 ${roomCount}、记账 ${ledgerCount}`);
+        }));
+    } catch (e) {
+      toast("Excel 文件格式不正确：" + e.message);
     }
   };
-  reader.readAsText(file);
+  reader.readAsArrayBuffer(file);
   event.target.value = "";
 });
 document.getElementById("refreshReminderBtn").addEventListener("click", withBusy(async () => {
