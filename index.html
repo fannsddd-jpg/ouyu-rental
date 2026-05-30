@@ -810,18 +810,18 @@
           <button class="btn" id="refreshReminderBtn">刷新提醒</button>
         </div>
         <div class="grid stats" style="margin-bottom:14px">
-          <div class="card stat-card"><div class="stat-label">7 天内到期</div><div class="stat-value" id="due7Count">0</div></div>
-          <div class="card stat-card"><div class="stat-label">30 天内到期</div><div class="stat-value" id="due30Count">0</div></div>
-          <div class="card stat-card"><div class="stat-label">欠租提醒</div><div class="stat-value" id="rentDueCount">0</div></div>
+          <div class="card stat-card"><div class="stat-label">即将收租</div><div class="stat-value" id="due7Count">0</div></div>
+          <div class="card stat-card"><div class="stat-label">合同到期</div><div class="stat-value" id="due30Count">0</div></div>
+          <div class="card stat-card"><div class="stat-label">收租逾期</div><div class="stat-value" id="rentDueCount">0</div></div>
           <div class="card stat-card"><div class="stat-label">空置房源</div><div class="stat-value" id="reminderVacantCount">0</div></div>
         </div>
         <div class="grid two-col">
           <div class="card">
-            <div class="panel-head"><h3>租期提醒</h3></div>
+            <div class="panel-head"><h3>收租跟踪</h3></div>
             <div class="panel-body"><div class="alerts" id="expiryAlerts"></div></div>
           </div>
           <div class="card">
-            <div class="panel-head"><h3>欠租与空置</h3></div>
+            <div class="panel-head"><h3>合同 & 空置</h3></div>
             <div class="panel-body"><div class="alerts" id="rentAlerts"></div></div>
           </div>
         </div>
@@ -878,13 +878,12 @@
         <input type="hidden" id="roomId">
         <div class="form-grid">
           <label>房间名称<input class="field" id="roomName" required placeholder="如：A 栋 801 主卧"></label>
-          <label>房间状态<select class="select" id="roomStatus"><option>空置</option><option>已出租</option><option>即将到期</option></select></label>
+          <label>房间状态<select class="select" id="roomStatus"><option>空置</option><option>已出租</option></select></label>
           <label class="full">地址<input class="field" id="roomAddress" placeholder="小区 / 楼栋 / 门牌"></label>
-          <label>房租<input class="field" type="number" min="0" step="0.01" id="roomRent" placeholder="0"></label>
+          <label>周期收租 (元)<input class="field" type="number" min="0" step="0.01" id="roomRent" placeholder="每期应收金额"></label>
+          <label>收租周期<select class="select" id="roomRentCycle"><option>月付</option><option>季付</option><option>半年付</option><option>年付</option></select></label>
           <label>押金<input class="field" type="number" min="0" step="0.01" id="roomDeposit" placeholder="0"></label>
-          <label>水费<input class="field" type="number" min="0" step="0.01" id="roomWater" placeholder="0"></label>
-          <label>电费<input class="field" type="number" min="0" step="0.01" id="roomElectric" placeholder="0"></label>
-          <label>网费<input class="field" type="number" min="0" step="0.01" id="roomInternet" placeholder="0"></label>
+          <label>上次收租日期<input class="field" type="date" id="roomLastRentDate" title="最近一次收到房租的日期，用于计算下次收租时间"></label>
           <label>租客姓名<input class="field" id="tenantName" placeholder="空置可不填"></label>
           <label>联系方式<input class="field" id="tenantPhone" placeholder="手机号 / 微信"></label>
           <label>入住时间<input class="field" type="date" id="startDate"></label>
