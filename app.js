@@ -317,14 +317,14 @@ function roomStatusClass(status) {
 }
 
 function getDashboardMonth() {
-  const dm = document.getElementById("dashboardMonth"); return dm ? dm.value : monthISO();
+  return document.getElementById("dashboardMonth").value || monthISO();
 }
 
 function getLedgerRows() {
   const month = document.getElementById("ledgerMonth").value;
   const type = document.getElementById("ledgerTypeFilter").value;
   const category = document.getElementById("ledgerCategoryFilter").value;
-  const qsEl = document.getElementById("quickSearch"); const query = qsEl ? qsEl.value.trim().toLowerCase() : "";
+  const query = document.getElementById("quickSearch").value.trim().toLowerCase();
   return state.ledger.filter(item => {
     const room = state.rooms.find(r => r.id === item.roomId);
     const haystack = [item.category, item.note, room?.name, room?.address].join(" ").toLowerCase();
@@ -370,38 +370,42 @@ function reminderData() {
 }
 
 function renderDashboard() {
+  const month = getDashboardMonth();
+  const monthRows = state.ledger.filter(i => sameMonth(i.date, month));
+  const yearRows = state.ledger.filter(i => i.date && i.date.slice(0, 4) === month.slice(0, 4));
+  const m = calcLedger(monthRows);
+  const y = calcLedger(yearRows);
+  const reminders = reminderData();
+
+  // 计算本月应收总额
   const rented = state.rooms.filter(r => r.status === "已出租" && r.rentPrice > 0);
+  // 简化：所有已出租房源当月应收
   const monthlyCost = rented.reduce((s, r) => s + (r.costRent||0) / (parseInt(r.costCycle)||1), 0);
   const monthlyIncome = rented.reduce((s, r) => s + (r.rentPrice||0) / (parseInt(r.rentCycle)||1), 0);
   const monthlyNet = monthlyIncome - monthlyCost;
-
-  // 大号盈利数字
-  const netEl = document.getElementById("netProfitBig");
-  netEl.textContent = money(monthlyNet);
-  netEl.classList.toggle("negative", monthlyNet < 0);
-  document.getElementById("dashIncome").textContent = money(monthlyIncome) + "/月";
-  document.getElementById("dashCost").textContent = money(monthlyCost) + "/月";
-  document.getElementById("dashRooms").textContent = state.rooms.length + "套";
+  document.getElementById("totalRooms").textContent = state.rooms.length;
+  document.getElementById("rentedRooms").textContent = rented.length;
+  document.getElementById("vacantRooms").textContent = reminders.vacant.length;
+  document.getElementById("expiringRooms").textContent = reminders.rentOverdue.length + reminders.rentDueSoon.length;
+  document.getElementById("monthIncome").textContent = money(m.income);
+  document.getElementById("monthExpense").textContent = money(m.expense);
+  document.getElementById("monthProfit").textContent = money(monthlyNet);
+  document.getElementById("yearProfit").textContent = money(y.profit);
   document.getElementById("sideProfit").textContent = money(monthlyNet);
 
-  // 提醒条
-  const reminders = reminderData();
-  const bar = document.getElementById("alertBar");
-  if (reminders.rentOverdue.length > 0) {
-    bar.style.display = "block";
-    bar.className = "alert-bar danger";
-    bar.textContent = `⚠ 有 ${reminders.rentOverdue.length} 套房源收租逾期，点击处理`;
-    bar.onclick = () => { document.getElementById("roomSearch").value = ""; document.getElementById("roomSearch").focus(); };
-  } else if (reminders.rentDueSoon.length > 0) {
-    bar.style.display = "block";
-    bar.className = "alert-bar warning";
-    bar.textContent = `📅 ${reminders.rentDueSoon.length} 套房源即将收租`;
-  } else {
-    bar.style.display = "none";
-  }
+  // 更新统计卡片标题
+  document.querySelector("#page-dashboard .stats .stat-card:nth-child(3) .stat-label span").textContent = "拿房成本";
+  document.querySelector("#page-dashboard .stats .stat-card:nth-child(4) .stat-label span").textContent = "月净利润";
 
-  // 房源倒计时卡片
-  renderRoomCards();
+  // 计算欠租总额
+  let totalArrears = 0;
+  reminders.rentOverdue.forEach(({ room, status }) => {
+    totalArrears += room.rentPrice * (status.overduePeriods + 1);
+  });
+  document.getElementById("expiringRooms").title = `欠租总额: ¥${totalArrears.toLocaleString()}`;
+
+  renderCashflowChart(month.slice(0, 4));
+  renderDashboardAlerts();
 }
 
 function renderCashflowChart(year) {
@@ -423,66 +427,76 @@ function renderCashflowChart(year) {
   });
 }
 
+function renderDashboardAlerts() {
+  const box = document.getElementById("dashboardAlerts");
+  const data = reminderData();
+  const rows = [
+    ...data.rentOverdue.map(({ room, status }) => ({
+      title: room.name + ` 收租逾期${status.overduePeriods}期`,
+      text: `每${status.cycleLabel}应收 ${money(room.rentPrice)}，上次收租: ${room.lastRentDate || "未记录"}。租客: ${room.tenantName || "未填写"}`,
+      danger: true
+    })),
+    ...data.rentDueSoon.map(({ room, status }) => ({
+      title: room.name + ` ${Math.abs(status.daysOverdue)}天后收租`,
+      text: `下次应收: ${status.nextDue}，每${status.cycleLabel} ¥${room.rentPrice}`,
+      danger: false
+    })),
+    ...data.contractExpiring.map(x => ({
+      title: x.room.name + ` 合同${x.days}天后到期`,
+      text: `到期日: ${x.room.endDate}，请提前沟通续租`,
+      danger: x.days <= 7
+    })),
+    ...data.contractOverdue.map(x => ({
+      title: x.room.name + ` 合同已过期${x.days}天`,
+      text: `到期日: ${x.room.endDate}，租客: ${x.room.tenantName || "未填写"}`,
+      danger: true
+    }))
+  ].slice(0, 6);
+  box.innerHTML = rows.length ? rows.map(alertTemplate).join("") : `<div class="empty">当前没有紧急提醒 ✓</div>`;
+}
 
 function alertTemplate(item) {
   return `<div class="alert ${item.danger ? "danger" : ""}"><strong>${escapeHTML(item.title)}</strong><span>${escapeHTML(item.text)}</span></div>`;
 }
 
-function renderRoomCards() {
-  const queryEl = document.getElementById("roomSearch");
-  const query = (queryEl ? queryEl.value : "").trim().toLowerCase();
+function renderRooms() {
+  const query = (document.getElementById("roomSearch").value + " " + document.getElementById("quickSearch").value).trim().toLowerCase();
+  const status = document.getElementById("roomStatusFilter").value;
   const rows = state.rooms.filter(room => {
     const haystack = [room.name, room.address, room.tenantName, room.tenantPhone, room.note].join(" ").toLowerCase();
-    return !query || haystack.includes(query);
+    return (!status || room.status === status) && (!query || haystack.includes(query));
   });
-
-  // 逾期在前，空置在后
-  rows.sort((a, b) => {
-    const sa = getRentStatus(a), sb = getRentStatus(b);
-    if (a.status === "空置" && b.status !== "空置") return 1;
-    if (b.status === "空置" && a.status !== "空置") return -1;
-    return sb.daysOverdue - sa.daysOverdue;
-  });
-
   const grid = document.getElementById("roomsGrid");
-  if (!grid) return;
-
   grid.innerHTML = rows.length ? rows.map(room => {
-    const rs = getRentStatus(room);
-    const monthlyProfit = room.rentPrice ? Math.round(room.rentPrice / (parseInt(room.rentCycle)||1)) - (room.costRent ? Math.round(room.costRent / (parseInt(room.costCycle)||1)) : 0) : 0;
-
-    let cdHtml = "";
-    if (room.status !== "空置" && room.rentPrice) {
-      if (rs.overduePeriods >= 1) {
-        cdHtml = '<span class="countdown-badge overdue">⚠ 逾期' + rs.overduePeriods + '期</span>';
-      } else if (rs.daysOverdue > 0) {
-        cdHtml = '<span class="countdown-badge overdue">⚠ 逾期' + rs.daysOverdue + '天</span>';
-      } else if (rs.daysOverdue > -7) {
-        cdHtml = '<span class="countdown-badge soon">⏰ ' + Math.abs(rs.daysOverdue) + '天后收租</span>';
-      } else {
-        cdHtml = '<span class="countdown-badge ok">✓ 正常</span>';
-      }
-    }
-
-    return '<article class="card room-card">' +
-      (cdHtml ? '<div style="position:absolute;top:12px;right:12px">' + cdHtml + '</div>' : "") +
-      '<div class="room-top">' +
-        '<div><h3>' + escapeHTML(room.name) + '</h3><p>' + escapeHTML(room.address || "未填写地址") + '</p></div>' +
-        (room.tenantName ? '<p style="color:var(--muted);font-size:13px;margin:4px 0 0">👤 ' + escapeHTML(room.tenantName) + '</p>' : "") +
-      '</div>' +
-      '<div class="room-meta">' +
-        '<div class="meta"><span>📤 出租</span><strong>' + money(room.rentPrice) + '/' + (room.rentCycle||"1个月") + '</strong></div>' +
-        '<div class="meta"><span>📥 拿房</span><strong>' + money(room.costRent) + '/' + (room.costCycle||"1个月") + '</strong></div>' +
-        '<div class="meta"><span>💰 月利润</span><strong style="color:' + (monthlyProfit>=0?'var(--success)':'var(--danger)') + '">' + money(monthlyProfit) + '</strong></div>' +
-        '<div class="meta"><span>📅 下次收租</span><strong>' + (rs.nextDue) + '</strong></div>' +
-      '</div>' +
-      '<div class="row-actions">' +
-        '<button class="btn" data-edit-room="' + room.id + '">编辑</button>' +
-        '<button class="btn primary" data-add-rent="' + room.id + '">💰 收租</button>' +
-        '<button class="btn danger" data-delete-room="' + room.id + '">删除</button>' +
-      '</div>' +
-    '</article>';
-  }).join("") : '<div class="empty" style="grid-column:1/-1">还没有房源，点击右上角"新增房源"开始吧。</div>';
+    const rentStatus = getRentStatus(room);
+    const statusBadge = room.status === "空置" ? "vacant"
+      : rentStatus.daysOverdue > 0 ? "danger"
+      : rentStatus.daysOverdue > -7 ? "expiring"
+      : "rented";
+    const monthlyCost = room.costRent ? Math.round(room.costRent / (parseInt(room.costCycle)||1)) : 0;
+    const monthlyIncome = room.rentPrice ? Math.round(room.rentPrice / (parseInt(room.rentCycle)||1)) : 0;
+    const monthlyProfit = monthlyIncome - monthlyCost;
+    return `
+    <article class="card room-card">
+      <div class="room-top">
+        <div><h3>${escapeHTML(room.name)}</h3><p>${escapeHTML(room.address || "未填写地址")}</p></div>
+        <span class="badge ${statusBadge}">${rentStatus.label}</span>
+      </div>
+      <div class="room-meta">
+        <div class="meta"><span>📤 出租</span><strong>${money(room.rentPrice)}/${room.rentCycle||"1个月"}</strong></div>
+        <div class="meta"><span>📥 拿房</span><strong>${money(room.costRent)}/${room.costCycle||"1个月"}</strong></div>
+        <div class="meta"><span>💰 月利润</span><strong style="color:${monthlyProfit>=0?'var(--success)':'var(--danger)'}">${money(monthlyProfit)}</strong></div>
+        <div class="meta"><span>上次收租</span><strong>${room.lastRentDate || "未记录"}</strong></div>
+        <div class="meta"><span>下次应收</span><strong>${rentStatus.nextDue || "-"}</strong></div>
+        <div class="meta"><span>合同到期</span><strong>${room.endDate || "未填写"}</strong></div>
+      </div>
+      <div class="row-actions">
+        <button class="btn" data-edit-room="${room.id}">编辑</button>
+        <button class="btn primary" data-add-rent="${room.id}">收租</button>
+        <button class="btn danger" data-delete-room="${room.id}">删除</button>
+      </div>
+    </article>
+  `}).join("") : `<div class="empty" style="grid-column:1/-1">还没有房源。点击"新增房源"开始录入。</div>`;
 }
 
 function renderLedger() {
@@ -536,6 +550,53 @@ function drawChart(id, type, data) {
   });
 }
 
+function renderReminders() {
+  const data = reminderData();
+  document.getElementById("due7Count").textContent = data.rentDueSoon.length;
+  document.getElementById("due30Count").textContent = data.contractExpiring.length;
+  document.getElementById("rentDueCount").textContent = data.rentOverdue.length;
+  document.getElementById("reminderVacantCount").textContent = data.vacant.length;
+
+  // 收租提醒
+  const rentRows = [
+    ...data.rentOverdue.map(({ room, status }) => ({
+      title: `⚠️ ${room.name} 收租逾期${status.overduePeriods}期`,
+      text: `每${status.cycleLabel}应收 ${money(room.rentPrice)}，上次收租: ${room.lastRentDate || "未记录"}。租客: ${room.tenantName || "未填写"}，电话: ${room.tenantPhone || "-"}`,
+      danger: true
+    })),
+    ...data.rentDueSoon.map(({ room, status }) => ({
+      title: `📅 ${room.name} ${Math.abs(status.daysOverdue)}天后收租`,
+      text: `下次应收: ${status.nextDue}，每${status.cycleLabel} ¥${room.rentPrice}。租客: ${room.tenantName || "未填写"}`,
+      danger: false
+    }))
+  ];
+
+  document.getElementById("expiryAlerts").innerHTML = rentRows.length
+    ? rentRows.map(alertTemplate).join("")
+    : `<div class="empty">所有房源收租正常 ✓</div>`;
+
+  // 合同 & 空置提醒
+  const otherRows = [
+    ...data.contractOverdue.map(x => ({
+      title: `📋 ${x.room.name} 合同已过期${x.days}天`,
+      text: `到期日: ${x.room.endDate}，租客: ${x.room.tenantName || "未填写"}，电话: ${x.room.tenantPhone || "-"}`,
+      danger: true
+    })),
+    ...data.contractExpiring.map(x => ({
+      title: `📋 ${x.room.name} 合同${x.days}天后到期`,
+      text: `到期日: ${x.room.endDate}，建议提前沟通续租或退租`,
+      danger: x.days <= 7
+    })),
+    ...data.vacant.map(room => ({
+      title: `🏠 ${room.name} 当前空置`,
+      text: `${room.address || "未填写地址"}，周期收租: ${money(room.rentPrice)}/${room.rentCycle||"1个月"}`,
+      danger: false
+    }))
+  ];
+  document.getElementById("rentAlerts").innerHTML = otherRows.length
+    ? otherRows.map(alertTemplate).join("")
+    : `<div class="empty">无合同或空置提醒 ✓</div>`;
+}
 
 function renderBackup() {
   const text = state.backupAt ? `最近服务器备份：${new Date(state.backupAt).toLocaleString("zh-CN")}。每次保存数据后会自动更新备份。` : "暂无服务器备份记录。";
@@ -544,10 +605,11 @@ function renderBackup() {
 
 function renderAll() {
   applyTheme();
-  const page = document.querySelector(".page.active")?.id || "page-dashboard";
-  if (page === "page-dashboard") { renderDashboard(); renderRoomCards(); }
-  if (page === "page-ledger") renderLedger();
-  if (page === "page-backup") renderBackup();
+  renderDashboard();
+  renderRooms();
+  renderLedger();
+  renderReminders();
+  renderBackup();
   fillRoomOptions();
 }
 
@@ -761,7 +823,7 @@ function applyTheme() {
   document.documentElement.dataset.theme = state.settings.theme || "light";
 }
 
-const dmEl = document.getElementById("dashboardMonth"); if (dmEl) dmEl.value = monthISO();
+document.getElementById("dashboardMonth").value = monthISO();
 document.getElementById("ledgerMonth").value = monthISO();
 
 document.getElementById("nav").addEventListener("click", event => {
@@ -792,20 +854,17 @@ document.body.addEventListener("click", event => {
 });
 
 document.getElementById("mobileMenu").addEventListener("click", () => document.getElementById("sidebar").classList.toggle("open"));
-const qrb = document.getElementById("quickRoomBtn"); if (qrb) qrb.addEventListener("click", () => openRoomForm());
+document.getElementById("quickRoomBtn").addEventListener("click", () => openRoomForm());
 document.getElementById("addRoomBtn").addEventListener("click", () => openRoomForm());
-const qlb = document.getElementById("quickLedgerBtn"); if (qlb) qlb.addEventListener("click", () => openLedgerForm());
-const arb2 = document.getElementById("addRoomBtn2"); if (arb2) arb2.addEventListener("click", () => openRoomForm());
-const alb2 = document.getElementById("addLedgerBtn2"); if (alb2) alb2.addEventListener("click", () => openLedgerForm());
-
+document.getElementById("quickLedgerBtn").addEventListener("click", () => openLedgerForm());
 document.getElementById("addLedgerBtn").addEventListener("click", () => openLedgerForm());
 document.getElementById("themeToggle").addEventListener("click", withBusy(async () => {
   await saveSettings({ ...state.settings, theme: state.settings.theme === "dark" ? "light" : "dark" }, "主题已切换");
 }));
 
-["quickSearch", "roomSearch", "ledgerMonth", "ledgerTypeFilter", "ledgerCategoryFilter"].forEach(id => {
-  const el = document.getElementById(id);
-  if (el) { el.addEventListener("input", renderAll); el.addEventListener("change", renderAll); }
+["quickSearch", "roomSearch", "roomStatusFilter", "dashboardMonth", "ledgerMonth", "ledgerTypeFilter", "ledgerCategoryFilter"].forEach(id => {
+  document.getElementById(id).addEventListener("input", renderAll);
+  document.getElementById(id).addEventListener("change", renderAll);
 });
 
 document.getElementById("roomForm").addEventListener("submit", withBusy(async event => {
@@ -902,8 +961,7 @@ document.getElementById("importExcelInput").addEventListener("change", event => 
   reader.readAsArrayBuffer(file);
   event.target.value = "";
 });
-const refreshBtn = document.getElementById("refreshReminderBtn");
-if (refreshBtn) refreshBtn.addEventListener("click", withBusy(async () => {
+document.getElementById("refreshReminderBtn").addEventListener("click", withBusy(async () => {
   await loadStateFromServer();
   toast("提醒已刷新");
 }));
@@ -915,7 +973,7 @@ window.addEventListener("keydown", event => {
   if (event.key === "Escape") document.querySelectorAll(".modal-backdrop.show").forEach(node => node.classList.remove("show"));
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
     event.preventDefault();
-    const qs = document.getElementById("quickSearch"); if (qs) qs.focus();
+    document.getElementById("quickSearch").focus();
   }
 });
 
