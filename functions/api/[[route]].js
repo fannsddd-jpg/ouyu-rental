@@ -38,12 +38,15 @@ function getLedger(db) {
 }
 
 function getSettings(db) {
-  const row = db.prepare("SELECT value FROM settings WHERE key = ?").first("settings");
-  return row ? JSON.parse(row.value) : { theme: "light" };
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'settings'").first();
+  if (row && row.value) {
+    try { return JSON.parse(row.value); } catch { return { theme: "light" }; }
+  }
+  return { theme: "light" };
 }
 
 function getBackupAt(db) {
-  const row = db.prepare("SELECT backup_at FROM backups WHERE id = ?").first(1);
+  const row = db.prepare("SELECT backup_at FROM backups WHERE id = 1").first();
   return row?.backup_at || null;
 }
 
