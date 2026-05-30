@@ -1,176 +1,125 @@
 /**
  * 偶域租房管理系统 — Cloudflare Worker
- * 处理 /api/* 路由，静态文件由 Workers Assets 提供
+ * D1 数据库 + Workers Assets 静态文件
  */
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      "cache-control": "no-store",
-    },
+    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
   });
 }
 
-function now() {
-  return new Date().toISOString();
-}
-
-async function readJson(request) {
-  try { return await request.json(); } catch { return {}; }
-}
+function now() { return new Date().toISOString(); }
+async function readJson(r) { try { return await r.json(); } catch { return {}; } }
 
 // ========== 数据库操作 ==========
 
-function getRooms(db) {
-  const result = db.prepare("SELECT data FROM rooms ORDER BY updated_at DESC").all();
-  return (result.results || []).map((r) => JSON.parse(r.data));
-}
-
-function getLedger(db) {
-  const result = db.prepare("SELECT data FROM ledger ORDER BY updated_at DESC").all();
-  return (result.results || []).map((r) => JSON.parse(r.data));
+function allRows(db, table) {
+  const result = db.prepare(`SELECT data FROM ${table} ORDER BY updated_at DESC`).all();
+  return (result.results || []).map(r => { try { return JSON.parse(r.data); } catch { return {}; } });
 }
 
 function getSettings(db) {
   const row = db.prepare("SELECT value FROM settings WHERE key = 'settings'").first();
-  if (row && row.value) {
-    try { return JSON.parse(row.value); } catch { return { theme: "light" }; }
-  }
+  if (row?.value) { try { return JSON.parse(row.value); } catch {} }
   return { theme: "light" };
-}
-
-function getBackupAt(db) {
-  const row = db.prepare("SELECT backup_at FROM backups WHERE id = 1").first();
-  return row?.backup_at || null;
 }
 
 function getState(db) {
   return {
-    rooms: getRooms(db),
-    ledger: getLedger(db),
+    rooms: allRows(db, "rooms"),
+    ledger: allRows(db, "ledger"),
     settings: getSettings(db),
-    backupAt: getBackupAt(db),
+    backupAt: (db.prepare("SELECT backup_at FROM backups WHERE id = 1").first())?.backup_at || null,
     updatedAt: now(),
   };
 }
 
-function replaceTable(db, table, rows) {
-  db.prepare(`DELETE FROM ${table}`).run();
-  const insert = db.prepare(`INSERT INTO ${table} (id, data, updated_at) VALUES (?, ?, ?)`);
-  for (const row of rows || []) {
-    if (!row.id) continue;
-    insert.bind(row.id, JSON.stringify(row), now()).run();
-  }
-}
-
-function saveSettings(db, settings) {
-  db.prepare(
-    `INSERT INTO settings (key, value, updated_at) VALUES ('settings', ?, ?)
-     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
-  ).bind(JSON.stringify(settings || { theme: "light" }), now()).run();
-}
-
-function createBackup(db) {
+function runBackup(db) {
   const state = getState(db);
-  const backupAt = now();
-  db.prepare(
-    `INSERT INTO backups (id, data, backup_at) VALUES (1, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET data = excluded.data, backup_at = excluded.backup_at`
-  ).bind(JSON.stringify({ ...state, backupAt }), backupAt).run();
-  return backupAt;
+  const at = now();
+  db.prepare("INSERT OR REPLACE INTO backups (id, data, backup_at) VALUES (1, ?, ?)")
+    .bind(JSON.stringify({ ...state, backupAt: at }), at).run();
+  return at;
 }
 
-function restoreBackup(db) {
-  const row = db.prepare("SELECT data FROM backups WHERE id = 1").first();
-  if (!row) return false;
-  const state = JSON.parse(row.data);
-  replaceTable(db, "rooms", state.rooms);
-  replaceTable(db, "ledger", state.ledger);
-  saveSettings(db, state.settings);
-  return true;
-}
-
-function importState(db, state) {
-  db.prepare("DELETE FROM rooms").run();
-  db.prepare("DELETE FROM ledger").run();
-  replaceTable(db, "rooms", state.rooms);
-  replaceTable(db, "ledger", state.ledger);
-  saveSettings(db, state.settings || { theme: "light" });
-  createBackup(db);
-}
-
-function clearAll(db) {
-  db.prepare("DELETE FROM rooms").run();
-  db.prepare("DELETE FROM ledger").run();
-  db.prepare("DELETE FROM settings").run();
-  saveSettings(db, { theme: "light" });
-  createBackup(db);
-}
+// ========== API 路由 ==========
 
 async function handleApi(request, db, url) {
   const path = url.pathname;
   try {
-    if (request.method === "GET" && path === "/api/state") {
-      return json(getState(db));
-    }
+    if (request.method === "GET" && path === "/api/state") return json(getState(db));
+
     if (request.method === "PUT" && path.startsWith("/api/rooms/")) {
       const room = await readJson(request);
-      const id = decodeURIComponent(path.split("/").pop());
-      room.id = id;
-      db.prepare(
-        `INSERT INTO rooms (id, data, updated_at) VALUES (?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`
-      ).bind(id, JSON.stringify(room), now()).run();
-      createBackup(db);
+      room.id = decodeURIComponent(path.split("/").pop());
+      db.prepare(`INSERT OR REPLACE INTO rooms (id, data, updated_at) VALUES (?, ?, ?)`)
+        .bind(room.id, JSON.stringify(room), now()).run();
+      runBackup(db);
       return json({ ok: true, state: getState(db) });
     }
     if (request.method === "DELETE" && path.startsWith("/api/rooms/")) {
-      const id = decodeURIComponent(path.split("/").pop());
-      db.prepare("DELETE FROM rooms WHERE id = ?").bind(id).run();
-      createBackup(db);
+      db.prepare("DELETE FROM rooms WHERE id = ?").bind(decodeURIComponent(path.split("/").pop())).run();
+      runBackup(db);
       return json({ ok: true, state: getState(db) });
     }
     if (request.method === "PUT" && path.startsWith("/api/ledger/")) {
       const item = await readJson(request);
-      const id = decodeURIComponent(path.split("/").pop());
-      item.id = id;
-      db.prepare(
-        `INSERT INTO ledger (id, data, updated_at) VALUES (?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`
-      ).bind(id, JSON.stringify(item), now()).run();
-      createBackup(db);
+      item.id = decodeURIComponent(path.split("/").pop());
+      db.prepare(`INSERT OR REPLACE INTO ledger (id, data, updated_at) VALUES (?, ?, ?)`)
+        .bind(item.id, JSON.stringify(item), now()).run();
+      runBackup(db);
       return json({ ok: true, state: getState(db) });
     }
     if (request.method === "DELETE" && path.startsWith("/api/ledger/")) {
-      const id = decodeURIComponent(path.split("/").pop());
-      db.prepare("DELETE FROM ledger WHERE id = ?").bind(id).run();
-      createBackup(db);
+      db.prepare("DELETE FROM ledger WHERE id = ?").bind(decodeURIComponent(path.split("/").pop())).run();
+      runBackup(db);
       return json({ ok: true, state: getState(db) });
     }
     if (request.method === "PUT" && path === "/api/settings") {
-      const settings = await readJson(request);
-      saveSettings(db, settings);
-      createBackup(db);
+      const s = await readJson(request);
+      db.prepare(`INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('settings', ?, ?)`)
+        .bind(JSON.stringify(s || { theme: "light" }), now()).run();
+      runBackup(db);
       return json({ ok: true, state: getState(db) });
     }
     if (request.method === "POST" && path === "/api/import") {
-      const state = await readJson(request);
-      importState(db, state);
+      const s = await readJson(request);
+      db.prepare("DELETE FROM rooms").run();
+      db.prepare("DELETE FROM ledger").run();
+      const ins = db.prepare("INSERT INTO rooms (id, data, updated_at) VALUES (?, ?, ?)");
+      for (const r of s.rooms || []) { if (r.id) ins.bind(r.id, JSON.stringify(r), now()).run(); }
+      const insL = db.prepare("INSERT INTO ledger (id, data, updated_at) VALUES (?, ?, ?)");
+      for (const l of s.ledger || []) { if (l.id) insL.bind(l.id, JSON.stringify(l), now()).run(); }
+      db.prepare(`INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('settings', ?, ?)`)
+        .bind(JSON.stringify(s.settings || { theme: "light" }), now()).run();
+      runBackup(db);
       return json({ ok: true, state: getState(db) });
     }
     if (request.method === "POST" && path === "/api/backup") {
-      const backupAt = createBackup(db);
-      return json({ ok: true, backupAt, state: getState(db) });
+      return json({ ok: true, backupAt: runBackup(db), state: getState(db) });
     }
     if (request.method === "POST" && path === "/api/backup/restore") {
-      const ok = restoreBackup(db);
-      if (!ok) return json({ ok: false, error: "没有可恢复的备份" }, 404);
+      const row = db.prepare("SELECT data FROM backups WHERE id = 1").first();
+      if (!row) return json({ ok: false, error: "没有可恢复的备份" }, 404);
+      const s = JSON.parse(row.data);
+      db.prepare("DELETE FROM rooms").run(); db.prepare("DELETE FROM ledger").run();
+      const ins = db.prepare("INSERT INTO rooms (id, data, updated_at) VALUES (?, ?, ?)");
+      for (const r of s.rooms || []) { if (r.id) ins.bind(r.id, JSON.stringify(r), now()).run(); }
+      const insL = db.prepare("INSERT INTO ledger (id, data, updated_at) VALUES (?, ?, ?)");
+      for (const l of s.ledger || []) { if (l.id) insL.bind(l.id, JSON.stringify(l), now()).run(); }
+      db.prepare(`INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('settings', ?, ?)`)
+        .bind(JSON.stringify(s.settings || { theme: "light" }), now()).run();
       return json({ ok: true, state: getState(db) });
     }
     if (request.method === "POST" && path === "/api/clear") {
-      clearAll(db);
+      db.prepare("DELETE FROM rooms").run();
+      db.prepare("DELETE FROM ledger").run();
+      db.prepare("DELETE FROM settings").run();
+      db.prepare(`INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('settings', ?, ?)`)
+        .bind(JSON.stringify({ theme: "light" }), now()).run();
+      runBackup(db);
       return json({ ok: true, state: getState(db) });
     }
     return json({ ok: false, error: "接口不存在" }, 404);
@@ -182,27 +131,15 @@ async function handleApi(request, db, url) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-
-    // OPTIONS 预检
     if (request.method === "OPTIONS") {
-      return new Response(null, {
-        headers: {
-          "access-control-allow-origin": "*",
-          "access-control-allow-methods": "GET,PUT,POST,DELETE,OPTIONS",
-          "access-control-allow-headers": "content-type",
-        },
-      });
+      return new Response(null, { headers: { "access-control-allow-origin": "*", "access-control-allow-methods": "GET,PUT,POST,DELETE,OPTIONS", "access-control-allow-headers": "content-type" } });
     }
-
-    // API 路由
     if (url.pathname.startsWith("/api/")) {
       if (!env.DB) return json({ ok: false, error: "数据库未配置" }, 500);
-      const response = await handleApi(request, env.DB, url);
-      response.headers.set("access-control-allow-origin", "*");
-      return response;
+      const res = await handleApi(request, env.DB, url);
+      res.headers.set("access-control-allow-origin", "*");
+      return res;
     }
-
-    // 静态文件由 Workers Assets 提供
     return env.ASSETS.fetch(request);
   },
 };
