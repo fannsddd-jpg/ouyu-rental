@@ -256,7 +256,7 @@ function getCycleDays(cycle) {
 }
 
 function getRentStatus(room) {
-  if (room.status === "空置" || !room.rentPricePrice) {
+  if (room.status === "空置" || !room.rentPrice) {
     return { label: room.status === "空置" ? "空置" : "待设置", daysOverdue: -999, nextDue: "-", overduePeriods: 0 };
   }
   const cycle = getCycleDays(room.rentCycle);
