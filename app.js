@@ -276,23 +276,31 @@ function getRentStatus(room) {
     nextDue.setDate(nextDue.getDate() + cycle);
   }
 
-  // 上次应收日 = nextDue - 一个周期
-  lastDue = new Date(nextDue);
-  lastDue.setDate(lastDue.getDate() - cycle);
+  // 逾期判断：今天是否已超过下次应收日
+  const daysUntilDue = Math.floor((nextDue - today) / 86400000);
+  // 倒数到下次收租的天数（正数=还没到，负数=已逾期）
+  const daysLeft = daysUntilDue;
 
-  // 逾期天数 = 今天 - 上次应收日
-  const daysOverdue = Math.floor((today - lastDue) / 86400000);
-  const overduePeriods = daysOverdue > 0 ? Math.floor(daysOverdue / cycle) + 1 : 0;
-
+  let daysOverdue = 0;
+  let overduePeriods = 0;
   let label;
-  if (overduePeriods >= 1) {
-    label = `已逾期${overduePeriods}期`;
-  } else if (daysOverdue > 0) {
-    label = `逾期${daysOverdue}天`;
-  } else if (daysOverdue > -7) {
-    label = `${Math.abs(daysOverdue)}天后收租`;
+
+  if (daysLeft < 0) {
+    // 已逾期：今天超过了 nextDue
+    daysOverdue = Math.abs(daysLeft);
+    overduePeriods = Math.floor(daysOverdue / cycle) + 1;
+    if (overduePeriods >= 1) {
+      label = `已逾期${overduePeriods}期`;
+    } else {
+      label = `逾期${daysOverdue}天`;
+    }
+  } else if (daysLeft <= 7) {
+    // 7天内即将收租
+    label = `${daysLeft}天后收租`;
+    daysOverdue = -daysLeft;
   } else {
     label = "正常";
+    daysOverdue = -daysLeft;
   }
 
   const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
