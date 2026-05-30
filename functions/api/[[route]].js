@@ -225,6 +225,7 @@ async function handleApi(request, db) {
 
 export async function onRequest(context) {
   const { request, env } = context;
+  const url = new URL(request.url);
 
   if (request.method === "OPTIONS") {
     return new Response(null, {
@@ -239,6 +240,17 @@ export async function onRequest(context) {
   const db = env.DB;
   if (!db) {
     return json({ ok: false, error: "数据库未配置，请绑定 D1" }, 500);
+  }
+
+  // 调试端点
+  if (request.method === "GET" && url.pathname === "/api/debug") {
+    try {
+      const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
+      const cnt = db.prepare("SELECT COUNT(*) as cnt FROM rooms").first();
+      return json({ tables: (tables.results || []).map(r => r.name), roomCount: cnt?.cnt });
+    } catch (e) {
+      return json({ error: e.message }, 500);
+    }
   }
 
   const response = await handleApi(request, db);
