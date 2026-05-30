@@ -250,6 +250,13 @@ function daysUntil(dateString) {
 
 // ========== 收租周期计算 ==========
 
+
+function cycleLabel(c) {
+  const map = {1:"一",2:"两",3:"三",4:"四",5:"五",6:"六",7:"七",8:"八",9:"九",10:"十",11:"十一",12:"十二"};
+  const m = String(c||"1个月").match(/^(\d+)(个月)$/);
+  return m ? (map[parseInt(m[1])]||m[1]) + m[2] : String(c||"1个月");
+}
+
 function getCycleDays(cycle) {
   const m = String(cycle || "1个月").match(/(\d+)/);
   return (m ? parseInt(m[1]) : 1) * 30;
@@ -257,14 +264,14 @@ function getCycleDays(cycle) {
 
 function getRentStatus(room) {
   if (room.status === "空置" || !room.rentPrice) {
-    return { label: room.status === "空置" ? "空置" : "待设置", daysOverdue: -999, nextDue: "-", overduePeriods: 0, cycleLabel: room.rentCycle||"1个月" };
+    return { label: room.status === "空置" ? "空置" : "待设置", daysOverdue: -999, nextDue: "-", overduePeriods: 0, cycleLabel: cycleLabel(room.rentCycle) };
   }
   const cycle = getCycleDays(room.rentCycle);
   const today = new Date(); today.setHours(0, 0, 0, 0);
 
   // 基准日期：上次收租日
   const baseStr = room.lastRentDate || room.startDate;
-  if (!baseStr) return { label: "待记录收租", daysOverdue: 0, nextDue: "-", overduePeriods: 0, cycleLabel: room.rentCycle||"1个月" };
+  if (!baseStr) return { label: "待记录收租", daysOverdue: 0, nextDue: "-", overduePeriods: 0, cycleLabel: cycleLabel(room.rentCycle) };
 
   // 简单算法：从上次收租日开始，不断加周期，直到超过今天
   let nextDue = new Date(baseStr + "T00:00:00");
@@ -306,7 +313,7 @@ function getRentStatus(room) {
     nextDue: fmt(nextDue),
     lastDue: fmt(lastDue),
     cycle,
-    cycleLabel: room.rentCycle || "1个月",
+    cycleLabel: cycleLabel(room.rentCycle),
   };
 }
 
@@ -485,8 +492,8 @@ function renderRooms() {
         <span class="badge ${statusBadge}">${rentStatus.label}</span>
       </div>
       <div class="room-meta">
-        <div class="meta"><span>📤 出租</span><strong>${money(room.rentPrice)}/${room.rentCycle||"1个月"}</strong></div>
-        <div class="meta"><span>📥 拿房</span><strong>${money(room.costRent)}/${room.costCycle||"1个月"}</strong></div>
+        <div class="meta"><span>📤 出租</span><strong>${money(room.rentPrice)}/${cycleLabel(room.rentCycle)}</strong></div>
+        <div class="meta"><span>📥 拿房</span><strong>${money(room.costRent)}/${cycleLabel(room.costCycle)}</strong></div>
         <div class="meta"><span>💰 月利润</span><strong style="color:${monthlyProfit>=0?'var(--success)':'var(--danger)'}">${money(monthlyProfit)}</strong></div>
         <div class="meta"><span>上次收租</span><strong>${room.lastRentDate || "未记录"}</strong></div>
         <div class="meta"><span>下次应收</span><strong>${rentStatus.nextDue || "-"}</strong></div>
@@ -591,7 +598,7 @@ function renderReminders() {
     })),
     ...data.vacant.map(room => ({
       title: `🏠 ${room.name} 当前空置`,
-      text: `${room.address || "未填写地址"}，周期收租: ${money(room.rentPrice)}/${room.rentCycle||"1个月"}`,
+      text: `${room.address || "未填写地址"}，周期收租: ${money(room.rentPrice)}/${cycleLabel(room.rentCycle)}`,
       danger: false
     }))
   ];
@@ -847,7 +854,7 @@ document.body.addEventListener("click", event => {
     const room = state.rooms.find(r => r.id === addRent.dataset.addRent);
     const rs = getRentStatus(room);
     const periodLabel = rs.overduePeriods >= 1 ? `（补${rs.overduePeriods+1}期）` : "";
-    openLedgerForm(null, { type: "income", category: "房租", roomId: room.id, amount: room.rentPrice * (rs.overduePeriods >= 1 ? rs.overduePeriods + 1 : 1), note: `${room.name} ${room.rentCycle||"1个月"}房租${periodLabel}` });
+    openLedgerForm(null, { type: "income", category: "房租", roomId: room.id, amount: room.rentPrice * (rs.overduePeriods >= 1 ? rs.overduePeriods + 1 : 1), note: `${room.name} ${cycleLabel(room.rentCycle)}房租${periodLabel}` });
   }
   const editLedger = event.target.closest("[data-edit-ledger]");
   if (editLedger) openLedgerForm(state.ledger.find(i => i.id === editLedger.dataset.editLedger));
