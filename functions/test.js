@@ -7,20 +7,18 @@ export async function onRequest(context) {
   }
 
   try {
-    // 尝试创建表
-    db.prepare("CREATE TABLE IF NOT EXISTS test_table (id TEXT PRIMARY KEY, value TEXT)").run();
-
-    // 写入数据
-    db.prepare("INSERT OR REPLACE INTO test_table (id, value) VALUES (?, ?)").bind("1", "hello-d1").run();
-
-    // 读取数据
-    const result = db.prepare("SELECT * FROM test_table").all();
+    const createResult = db.prepare("CREATE TABLE IF NOT EXISTS test_table (id TEXT PRIMARY KEY, value TEXT)").run();
+    const insertResult = db.prepare("INSERT OR REPLACE INTO test_table (id, value) VALUES (?, ?)").bind("1", "hello-d1").run();
+    const selectResult = db.prepare("SELECT * FROM test_table").all();
+    const tablesResult = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
 
     return new Response(JSON.stringify({
-      success: true,
-      results: result.results || [],
-      raw: result
-    }), {
+      create: { success: createResult?.success, changes: createResult?.meta?.changes },
+      insert: { success: insertResult?.success, changes: insertResult?.meta?.changes },
+      select: { results: selectResult?.results, success: selectResult?.success },
+      tables: tablesResult?.results,
+      hasDB: !!db,
+    }, null, 2), {
       headers: { "content-type": "application/json" }
     });
   } catch (e) {
