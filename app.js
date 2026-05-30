@@ -286,20 +286,14 @@ function getRentStatus(room) {
   let label;
 
   if (daysLeft < 0) {
-    // 已逾期：今天超过了 nextDue
     daysOverdue = Math.abs(daysLeft);
     overduePeriods = Math.floor(daysOverdue / cycle) + 1;
-    if (overduePeriods >= 1) {
-      label = `已逾期${overduePeriods}期`;
-    } else {
-      label = `逾期${daysOverdue}天`;
-    }
+    label = overduePeriods >= 1 ? `-${overduePeriods}期` : `-${daysOverdue}天`;
   } else if (daysLeft <= 7) {
-    // 7天内即将收租
-    label = `${daysLeft}天后收租`;
+    label = `${daysLeft}天`;
     daysOverdue = -daysLeft;
   } else {
-    label = "正常";
+    label = `${daysLeft}天`;
     daysOverdue = -daysLeft;
   }
 
