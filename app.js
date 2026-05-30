@@ -560,7 +560,7 @@ document.getElementById("refreshReminderBtn").addEventListener("click", withBusy
   toast("提醒已刷新");
 }));
 document.getElementById("seedGuideBtn").addEventListener("click", () => {
-  alert("Cloudflare 部署版升级路线\\n\\n数据存储：所有数据存储在 Cloudflare D1 数据库中，永久保存。\\n自定义域名：在 Cloudflare Dashboard 绑定自己的域名。\\n安全：可配合 Cloudflare Access 添加访问控制。\\n移动端：当前页面已做响应式适配，手机浏览器可直接访问。\\n备份：定期使用系统内"导出 JSON"功能下载本地备份。");
+  alert('Cloudflare 部署版升级路线\n\n数据存储：所有数据存储在 Cloudflare D1 数据库中，永久保存。\n自定义域名：在 Cloudflare Dashboard 绑定自己的域名。\n安全：可配合 Cloudflare Access 添加访问控制。\n移动端：当前页面已做响应式适配，手机浏览器可直接访问。\n备份：定期使用系统内[导出 JSON]功能下载本地备份。');
 });
 
 window.addEventListener("keydown", event => {
