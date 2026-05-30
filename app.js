@@ -250,13 +250,16 @@ function daysUntil(dateString) {
 
 // ========== 收租周期计算 ==========
 
-const CYCLE_DAYS = { "月付": 30, "季付": 90, "半年付": 180, "年付": 365 };
+function getCycleDays(cycle) {
+  const m = String(cycle || "1个月").match(/(\d+)/);
+  return (m ? parseInt(m[1]) : 1) * 30;
+}
 
 function getRentStatus(room) {
   if (room.status === "空置" || !room.rent) {
     return { label: room.status === "空置" ? "空置" : "待设置", daysOverdue: -999, nextDue: "-", overduePeriods: 0 };
   }
-  const cycle = CYCLE_DAYS[room.rentCycle] || 30;
+  const cycle = getCycleDays(room.rentCycle);
   const today = new Date(); today.setHours(0, 0, 0, 0);
 
   // 确定基准日期：上次收租日期 > 入住日期
@@ -304,7 +307,7 @@ function getRentStatus(room) {
     nextDue: `${nextDue.getFullYear()}-${String(nextDue.getMonth()+1).padStart(2,'0')}-${String(nextDue.getDate()).padStart(2,'0')}`,
     lastDue: `${lastDue.getFullYear()}-${String(lastDue.getMonth()+1).padStart(2,'0')}-${String(lastDue.getDate()).padStart(2,'0')}`,
     cycle,
-    cycleLabel: room.rentCycle || "月付",
+    cycleLabel: room.rentCycle || "1个月",
   };
 }
 
@@ -387,7 +390,7 @@ function renderDashboard() {
   });
   // 简化：所有已出租房源当月应收
   const monthlyExpected = rented.reduce((s, r) => {
-    const cycle = CYCLE_DAYS[r.rentCycle] || 30;
+    const cycle = getCycleDays(r.rentCycle);
     return s + r.rent / (cycle / 30); // 折算为月均
   }, 0);
 
@@ -488,7 +491,7 @@ function renderRooms() {
         <span class="badge ${statusBadge}">${rentStatus.label}</span>
       </div>
       <div class="room-meta">
-        <div class="meta"><span>周期收租</span><strong>${money(room.rent)}/${room.rentCycle||"月付"}</strong></div>
+        <div class="meta"><span>周期收租</span><strong>${money(room.rent)}/${room.rentCycle||"1个月"}</strong></div>
         <div class="meta"><span>押金</span><strong>${money(room.deposit)}</strong></div>
         <div class="meta"><span>租客</span><strong>${escapeHTML(room.tenantName || "未填写")}</strong></div>
         <div class="meta"><span>上次收租</span><strong>${room.lastRentDate || "未记录"}</strong></div>
@@ -594,7 +597,7 @@ function renderReminders() {
     })),
     ...data.vacant.map(room => ({
       title: `🏠 ${room.name} 当前空置`,
-      text: `${room.address || "未填写地址"}，周期收租: ${money(room.rent)}/${room.rentCycle||"月付"}`,
+      text: `${room.address || "未填写地址"}，周期收租: ${money(room.rent)}/${room.rentCycle||"1个月"}`,
       danger: false
     }))
   ];
@@ -624,7 +627,7 @@ function openRoomForm(room) {
   document.getElementById("roomName").value = room?.name || "";
   document.getElementById("roomAddress").value = room?.address || "";
   document.getElementById("roomRent").value = room?.rent || "";
-  document.getElementById("roomRentCycle").value = room?.rentCycle || "月付";
+  document.getElementById("roomRentCycle").value = room?.rentCycle || "1个月";
   document.getElementById("roomDeposit").value = room?.deposit || "";
   document.getElementById("roomLastRentDate").value = room?.lastRentDate || "";
   document.getElementById("roomStatus").value = room?.status || "空置";
@@ -838,7 +841,7 @@ document.body.addEventListener("click", event => {
     const room = state.rooms.find(r => r.id === addRent.dataset.addRent);
     const rs = getRentStatus(room);
     const periodLabel = rs.overduePeriods >= 1 ? `（补${rs.overduePeriods+1}期）` : "";
-    openLedgerForm(null, { type: "income", category: "房租", roomId: room.id, amount: room.rent * (rs.overduePeriods >= 1 ? rs.overduePeriods + 1 : 1), note: `${room.name} ${room.rentCycle||"月付"}房租${periodLabel}` });
+    openLedgerForm(null, { type: "income", category: "房租", roomId: room.id, amount: room.rent * (rs.overduePeriods >= 1 ? rs.overduePeriods + 1 : 1), note: `${room.name} ${room.rentCycle||"1个月"}房租${periodLabel}` });
   }
   const editLedger = event.target.closest("[data-edit-ledger]");
   if (editLedger) openLedgerForm(state.ledger.find(i => i.id === editLedger.dataset.editLedger));
@@ -868,7 +871,7 @@ document.getElementById("roomForm").addEventListener("submit", withBusy(async ev
     name: document.getElementById("roomName").value.trim(),
     address: document.getElementById("roomAddress").value.trim(),
     rent: Number(document.getElementById("roomRent").value || 0),
-    rentCycle: document.getElementById("roomRentCycle").value || "月付",
+    rentCycle: document.getElementById("roomRentCycle").value || "1个月",
     deposit: Number(document.getElementById("roomDeposit").value || 0),
     lastRentDate: document.getElementById("roomLastRentDate").value || "",
     status: document.getElementById("roomStatus").value,
